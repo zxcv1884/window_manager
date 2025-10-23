@@ -967,7 +967,13 @@ void _emit_event(WindowManagerPlugin* plugin, const char* event_name) {
 gboolean on_window_close(GtkWidget* widget, GdkEvent* event, gpointer data) {
   WindowManagerPlugin* plugin = WINDOW_MANAGER_PLUGIN(data);
   _emit_event(plugin, "close");
-  return plugin->_is_prevent_close;
+  if (!plugin->_is_prevent_close) {
+    GApplication* app = g_application_get_default();
+    if (app) {
+      g_application_quit(app);
+    }
+  }
+  return true;
 }
 
 gboolean on_window_focus(GtkWidget* widget, GdkEvent* event, gpointer data) {
