@@ -626,6 +626,30 @@ static FlMethodResponse* start_dragging(WindowManagerPlugin* self) {
   return FL_METHOD_RESPONSE(fl_method_success_response_new(result));
 }
 
+static void quit_application() {
+  GApplication* app = g_application_get_default();
+  if (app == nullptr) {
+    // Unable to gracefully quit, so just exit the process.
+    exit(0);
+  }
+
+  // GtkApplication windows contain a reference back to the application.
+  // Break them so the application object can cleanup.
+  // See https://gitlab.gnome.org/GNOME/gtk/-/issues/6190
+  if (GTK_IS_APPLICATION(app)) {
+    // List is copied as it will be modified as windows are disconnected from
+    // the application.
+    g_autoptr(GList) windows =
+        g_list_copy(gtk_application_get_windows(GTK_APPLICATION(app)));
+    for (GList* link = windows; link != NULL; link = link->next) {
+      GtkWidget* window = GTK_WIDGET(link->data);
+      gtk_window_set_application(GTK_WINDOW(window), NULL);
+    }
+  }
+
+  g_application_quit(app);
+}
+
 static void gtk_container_children_callback(GtkWidget* widget,
                                             gpointer client_data) {
   GList** children;
@@ -968,10 +992,10 @@ gboolean on_window_close(GtkWidget* widget, GdkEvent* event, gpointer data) {
   WindowManagerPlugin* plugin = WINDOW_MANAGER_PLUGIN(data);
   _emit_event(plugin, "close");
   if (!plugin->_is_prevent_close) {
-    GApplication* app = g_application_get_default();
-    if (app) {
-      g_application_quit(app);
-    }
+    g_idle_add([](gpointer) -> gboolean {
+      quit_application();
+      return G_SOURCE_REMOVE;
+    }, nullptr);
   }
   return true;
 }
